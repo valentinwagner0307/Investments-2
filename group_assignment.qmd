@@ -40,6 +40,7 @@ library(PortfolioAnalytics)
 library(PerformanceAnalytics)
 library(ROI)
 library(ROI.plugin.quadprog)
+library(ROI.plugin.glpk)
 library(writexl)
 library(broom)
 ```
@@ -153,7 +154,7 @@ max_drawdown <- prices %>%
 statistics_stocks <- returns %>%
   group_by(ticker) %>%
   summarise(
-    mean_return = mean(returns, na.rm = TRUE),
+    mean_return = exp(mean(returns_log, na.rm = TRUE)) - 1,
     sd_return   = sd(returns, na.rm = TRUE),
     min_return  = min(returns, na.rm = TRUE),
     max_return  = max(returns, na.rm = TRUE)
@@ -162,13 +163,13 @@ statistics_stocks <- returns %>%
 
 statistics_stocks %>%
   mutate(
-    mean_return = mean_return * 100 * 12,
+    mean_return = ((1 + mean_return)^12 - 1) * 100,
     sd_return = sd_return * 100 * sqrt(12),
     min_return = min_return * 100,
     max_return = max_return * 100,
     max_drawdown = max_drawdown * 100
   ) %>%
-  kable(col.names = c("Ticker", "Ø Return (%) p.a.", "Std.Dev. (%) p.a.", "Minimum (%)", "Maximum (%)", "Max Drawdown (%)"),
+  kable(col.names = c("Ticker", "Ø Return Geo. (% p.a.)", "Std.Dev. (%) p.a.", "Minimum (%)", "Maximum (%)", "Max Drawdown (%)"),
         digits = 2)
 ```
 
@@ -202,36 +203,6 @@ distribution_stocks %>%
 
 ## Time-Varying Risk and Performance
 
-\[PLATZHALTER\]
-
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-vola_rolling <- returns %>%
-  group_by(ticker) %>%
-  arrange(date) %>%
-  mutate(
-    roll_sd = slide_dbl(
-      returns_log,
-      sd,
-      .before = 11,
-      .complete = TRUE
-    ),
-    roll_sd_annual = roll_sd * sqrt(12)
-  ) %>%
-  select(-c("permno", "company", "returns", "returns_log"))
-
-
-ggplot(vola_rolling,
-       aes(x = date, y = roll_sd_annual, group = ticker, color = ticker)) +
-  geom_line(alpha = 0.5) +
-  labs(
-    title = "12 month rolling Volatility (annual)",
-    x = "Date",
-    y = "Rolling Volatility"
-  ) +
-  theme_minimal() +
-  theme(legend.position = "bottom", legend.title = element_blank())
-```
-
 ```{r message=FALSE, warning=FALSE, echo=FALSE}
 # Leider fehlende Werte von rF_monthly für 2024-03-28 ; 2018-03-29 ; 2021-05-28
 # Letzten Tag im Monat genommen
@@ -257,7 +228,7 @@ sharpe_ratio_rolling <- excess_return %>%
       .complete = TRUE
     ),
     roll_sd = slide_dbl(
-      returns,
+      excess_return,
       sd,
       .before = 11,
       .complete = TRUE
@@ -267,6 +238,7 @@ sharpe_ratio_rolling <- excess_return %>%
   ungroup()
 
 ggplot(sharpe_ratio_rolling, aes(x = date.x, y = sharpe_ratio_rolling, group = ticker, color = ticker)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha = 0.7) +
   geom_line(alpha = 0.5) +
   labs(title = "12 month Rolling Sharpe Ratios", x = "Date", y = "SR (annualized)") +
   theme_minimal() +
@@ -352,9 +324,11 @@ ggplot(cor_long, aes(x = Stock2, y = Stock1, fill = Correlation)) +
     size = 1.5,
     color = "black"
   ) +
-  scale_fill_gradient(
-    low = "#e5f5e0",
-    high = "#238b45",
+  scale_fill_gradient2(
+    low = "#d73027",
+    mid = "#FFFFFF",
+    high = "#1a9850",
+    midpoint = 0,
     limits = c(-1, 1),
     name = "Correlation"
   ) +
@@ -377,7 +351,10 @@ ggplot(cor_long, aes(x = Stock2, y = Stock1, fill = Correlation)) +
 ```{r echo = FALSE}
 statistics_portfolio_ew <- portfolio_ew %>%
   summarise(
-    mean_return = mean(portfolio_ew_return, na.rm = TRUE) * 12 * 100,
+    # Arithmetisch für SR
+    mean_return_arith = mean(portfolio_ew_return, na.rm = TRUE) * 12 * 100,
+    # Geometrisch für Performance Vergleich
+    mean_return_geo = ((1 + (exp(mean(log(1 + portfolio_ew_return), na.rm = TRUE)) - 1))^12 - 1) * 100,
     sd_return   = sd(portfolio_ew_return, na.rm = TRUE) * sqrt(12) * 100,
     min_return  = min(portfolio_ew_return, na.rm = TRUE) * 100,
     max_return  = max(portfolio_ew_return, na.rm = TRUE) * 100
@@ -397,9 +374,10 @@ statistics_portfolio_ew <- statistics_portfolio_ew %>%
 statistics_portfolio_ew <- statistics_portfolio_ew %>%
   mutate(
     sharpe_ratio = (
-      mean(portfolio_ew$portfolio_ew_return - dtb3$rF_monthly, na.rm = TRUE) /
-      sd(portfolio_ew$portfolio_ew_return, na.rm = TRUE)
-    )
+      #Excess Return existiert schon (sicherer) + annualisiert
+      mean(portfolio_ew$portfolio_ew_excess_return, na.rm = TRUE) /
+      sd(portfolio_ew$portfolio_ew_return, na.rm = TRUE) 
+    ) * sqrt(12)
   )
 
 
@@ -407,12 +385,13 @@ statistics_portfolio_ew <- statistics_portfolio_ew %>%
 statistics_portfolio_ew %>%
   kable(
     col.names = c(
-      "Ø Return (% p.a.)",
+      "Ø Return Arith. (% p.a.)",
+      "Ø Return Geo. (% p.a.)", 
       "Volatility (% p.a.)",
-      "Minimum (%)",
-      "Maximum (%)",
+      "Min Month (%)",
+      "Max Month (%)",
       "Max Drawdown (%)",
-      "Sharpe Ratio p.m."
+      "Sharpe Ratio (annual)"
     ),
     digits = 2
   )
@@ -439,8 +418,9 @@ portfolio_ew_vola_rolling <- portfolio_ew %>%
 ggplot(portfolio_ew_vola_rolling,
        aes(x = date.x, y = roll_sd_annual)) +
   geom_line(color = "black", linewidth = 1) +
+  scale_y_continuous(labels = scales::percent) +
   labs(
-    title = "12-Month Rolling Volatility – Equal-Weighted Portfolio",
+    title = "12-Month Rolling Volatility – Equally-Weighted Portfolio",
     x = "Date",
     y = "Volatility (% p.a.)"
   ) +
@@ -464,7 +444,7 @@ portfolio_ew_sharpe_rolling <- portfolio_ew %>%
       .complete = TRUE
     ),
     roll_sd = slide_dbl(
-      portfolio_ew_return,
+      portfolio_ew_excess_return,
       sd,
       .before = 11,
       .complete = TRUE
@@ -474,6 +454,7 @@ portfolio_ew_sharpe_rolling <- portfolio_ew %>%
 
 ggplot(portfolio_ew_sharpe_rolling,
        aes(x = date.x, y = sharpe_12m)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha = 0.7) +
   geom_line(color = "black", linewidth = 1) +
   labs(
     title = "12-Month Rolling Sharpe Ratio – Equal-Weighted Portfolio",
@@ -489,63 +470,58 @@ ggplot(portfolio_ew_sharpe_rolling,
 \[PLATZHALTER\]
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_data <- portfolio_ew_prices %>%
+  mutate(Phase = case_when(
+    date.x < "2020-01-01" ~ "1. Pre-COVID",
+    date.x < "2022-01-01" ~ "2. Pandemic (QE)",
+    TRUE                  ~ "3. Inflation (Rates)"
+  ))
 
-# Sub period analysis
-covid_date <- as.Date("2020-02-01")
-
-# Covid crash
-ggplot(portfolio_ew_prices, aes(x = date.x, y = portfolio_price)) +
-  geom_line(color = "black", linewidth = 1) +
-  geom_vline(
-    xintercept = covid_date,
-    linetype = "dashed",
-    color = "darkred",
-    linewidth = 0.8
-  ) +
-  annotate(
-    "text",
-    x = covid_date,
-    y = max(portfolio_ew_prices$portfolio_price, na.rm = TRUE),
-    label = "COVID-19",
-    vjust = -0.5,
-    hjust = -0.1,
-    color = "darkred",
-    size = 4
-  ) +
+ggplot(plot_data, aes(x = date.x, y = portfolio_price, color = Phase, group = 1)) +
+  geom_line(linewidth = 1) +
+  geom_vline(xintercept = as.Date("2020-02-01"), linetype = "dotted", color = "darkred") + 
+  geom_vline(xintercept = as.Date("2022-01-01"), linetype = "dotted", color = "blue") +    
+  
+  scale_color_manual(values = c(
+    "1. Pre-COVID" = "grey60", 
+    "2. Pandemic (QE)" = "#1a9850",  # Grün (Rallye)
+    "3. Inflation (Rates)" = "black" # Aktuell
+  )) +
   labs(
-    title = "Equal-Weighted Portfolio Performance",
-    subtitle = "COVID-19 period highlighted",
+    title = "Equal-Weighted Portfolio: 3-Phase Regime Analysis",
+    subtitle = "Separating Pre-Crisis, Pandemic Liquidity, and Rate Hike Era",
     x = "Date",
     y = "Portfolio Value (Base = 100)"
   ) +
-  theme_minimal()
+  theme_minimal() +
+  theme(legend.position = "bottom")
 
-# kennzahlen subperioden
 portfolio_ew_sub <- portfolio_ew %>%
   mutate(
-    period = if_else(
-      date.x < as.Date("2020-01-01"),
-      "Pre-COVID (2014–2019)",
-      "Post-COVID (2020–2024)"
+    period = case_when(
+      date.x < as.Date("2020-01-01") ~ "1. Pre-COVID (2014–2019)",
+      date.x < as.Date("2022-01-01") ~ "2. Pandemic (2020–2021)",
+      TRUE                           ~ "3. Rate Hikes (2022–2024)"
     )
   )
 
 portfolio_ew_stats_sub <- portfolio_ew_sub %>%
   group_by(period) %>%
   summarise(
-    mean_return_pa = mean(portfolio_ew_return, na.rm = TRUE) * 12 * 100,
-    volatility_pa  = sd(portfolio_ew_return, na.rm = TRUE) * sqrt(12) * 100,
-    sharpe_ratio   = mean(portfolio_ew_excess_return, na.rm = TRUE) /
-                     sd(portfolio_ew_return, na.rm = TRUE) * sqrt(12),
+    mean_return_arith = mean(portfolio_ew_return, na.rm = TRUE) * 12 * 100,
+    mean_return_geo   = ((1 + (exp(mean(log(1 + portfolio_ew_return), na.rm = TRUE)) - 1))^12 - 1) * 100,
+    volatility_pa     = sd(portfolio_ew_return, na.rm = TRUE) * sqrt(12) * 100,
+    sharpe_ratio      = (mean(portfolio_ew_excess_return, na.rm = TRUE) /
+                         sd(portfolio_ew_return, na.rm = TRUE)) * sqrt(12),
     .groups = "drop"
   )
 
 portfolio_ew_dd_sub <- portfolio_ew_prices %>%
   mutate(
-    period = if_else(
-      date.x < as.Date("2020-01-01"),
-      "Pre-COVID (2014–2019)",
-      "Post-COVID (2020–2024)"
+    period = case_when(
+      date.x < as.Date("2020-01-01") ~ "1. Pre-COVID (2014–2019)",
+      date.x < as.Date("2022-01-01") ~ "2. Pandemic (2020–2021)",
+      TRUE                           ~ "3. Rate Hikes (2022–2024)"
     )
   ) %>%
   group_by(period) %>%
@@ -556,22 +532,20 @@ portfolio_ew_dd_sub <- portfolio_ew_prices %>%
 
 portfolio_ew_table_sub <- portfolio_ew_stats_sub %>%
   left_join(portfolio_ew_dd_sub, by = "period") %>%
-  mutate(
-    across(where(is.numeric), round, 2)
-  )
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
 
 kable(
   portfolio_ew_table_sub,
   col.names = c(
     "Period",
-    "Ø Return (% p.a.)",
+    "Ø Return Arith. (% p.a.)",
+    "Ø Return Geo. (% p.a.)",
     "Volatility (% p.a.)",
-    "Sharpe Ratio",
+    "Sharpe Ratio (annual)",
     "Max Drawdown (%)"
   ),
-  caption = "Subperiod Analysis of the Equal-Weighted Portfolio"
+  caption = "Detailed Regime Analysis: Impact of Rates and Inflation"
 )
-
 ```
 
 # Portfolio formation
@@ -635,43 +609,92 @@ chart.EfficientFrontier(
   col = "darkred"
 )
 
+weights_tangential <- extractWeights(tan) %>% 
+  as.data.frame() %>% 
+  rownames_to_column("Ticker") %>% 
+  rename(Weight = ".") %>% 
+  arrange(desc(Weight))
 
-# Gewichte
-weights_tangential_portfolio <- as.data.frame(extractWeights(tan)) %>% rownames_to_column(var ="ticker")
-colnames(weights_tangential_portfolio) <- c("Ticker", "Weights")
-
-
-# Rendite und vola
-stats_tangential_portfolio <- as.data.frame(extractObjectiveMeasures(tan))
-rownames(stats_tangential_portfolio) <- "Market Portfolio p.m."
-colnames(stats_tangential_portfolio) <- c("St. Dev.", "Return")
-
-# rf ist funktion, muss definiert werden
-rf_SR <- 0.001332711
-
-SharpeRatio = (as.numeric(extractObjectiveMeasures(tan)$mean) - rf_SR) / as.numeric(extractObjectiveMeasures(tan)$StdDev)
-
-stats_tangential_portfolio$`Sharpe Ratio` = SharpeRatio
-
-stats_tangential_portfolio <- rbind(
-  stats_tangential_portfolio,
-  "Market Portfolio p.a." = c(
-    stats_tangential_portfolio$`St. Dev.` * sqrt(12),
-    (1 + stats_tangential_portfolio$Return)^(12)-1,
-    stats_tangential_portfolio$`Sharpe Ratio` * sqrt(12))
-  )
-
-# output als tabelle
-kable(stats_tangential_portfolio)
-
-
-# tabelle für gewichte
-h <- ceiling(nrow(weights_tangential_portfolio)/2)
+# Zweispaltige Darstellung der Tabelle
+h <- ceiling(nrow(weights_tangential)/2)
+weights_split <- cbind(
+  weights_tangential[1:h, ], 
+  weights_tangential[(h+1):nrow(weights_tangential), ][1:h, ]
+)
 
 kable(
-  cbind(weights_tangential_portfolio[1:h, ], weights_tangential_portfolio[(h+1):nrow(weights_tangential_portfolio), ][1:h, ]),
-  col.names = c("Ticker","Weight","Ticker","Weight")
+  weights_split, 
+  digits = 4, 
+  caption = "Tangency Portfolio Weights (Optimized)",
+  col.names = c("Ticker", "Weight", "Ticker", "Weight")
 )
+
+
+tan_returns_xts <- Return.portfolio(R, weights = extractWeights(tan))
+
+tan_stats <- data.frame(
+  Portfolio = "Tangency (Optimized)",
+  Mean_Arith_PA = mean(tan_returns_xts, na.rm=TRUE) * 12 * 100,
+  Mean_Geo_PA   = (prod(1 + tan_returns_xts)^(12/nrow(tan_returns_xts)) - 1) * 100,
+  Vol_PA        = sd(tan_returns_xts, na.rm=TRUE) * sqrt(12) * 100,
+  Sharpe_Annual = (mean(tan_returns_xts - rF_portfolio_chart, na.rm=TRUE) / 
+                   sd(tan_returns_xts, na.rm=TRUE)) * sqrt(12)
+)
+
+ew_stats <- data.frame(
+  Portfolio = "Equal Weighted (Naive)",
+  Mean_Arith_PA = statistics_portfolio_ew$mean_return_arith,
+  Mean_Geo_PA   = statistics_portfolio_ew$mean_return_geo,
+  Vol_PA        = statistics_portfolio_ew$sd_return,
+  Sharpe_Annual = statistics_portfolio_ew$sharpe_ratio
+)
+
+comparison_table <- bind_rows(ew_stats, tan_stats) %>%
+  mutate(across(where(is.numeric), round, 2))
+
+kable(
+  comparison_table,
+  col.names = c("Portfolio Strategy", "Ø Return Arith. (% p.a.)", "Ø Return Geo. (% p.a.)", "Volatility (% p.a.)", "Sharpe Ratio"),
+  caption = "Performance Comparison: Naive Diversification (1/N) vs. Markowitz Optimization"
+)
+
+
+# # Gewichte
+# weights_tangential_portfolio <- as.data.frame(extractWeights(tan)) %>% rownames_to_column(var ="ticker")
+# colnames(weights_tangential_portfolio) <- c("Ticker", "Weights")
+# 
+# 
+# # Rendite und vola
+# stats_tangential_portfolio <- as.data.frame(extractObjectiveMeasures(tan))
+# rownames(stats_tangential_portfolio) <- "Market Portfolio p.m."
+# colnames(stats_tangential_portfolio) <- c("St. Dev.", "Return")
+# 
+# # rf ist funktion, muss definiert werden
+# rf_SR <- 0.001332711
+# 
+# SharpeRatio = (as.numeric(extractObjectiveMeasures(tan)$mean) - rf_SR) / as.numeric(extractObjectiveMeasures(tan)$StdDev)
+# 
+# stats_tangential_portfolio$`Sharpe Ratio` = SharpeRatio
+# 
+# stats_tangential_portfolio <- rbind(
+#   stats_tangential_portfolio,
+#   "Market Portfolio p.a." = c(
+#     stats_tangential_portfolio$`St. Dev.` * sqrt(12),
+#     (1 + stats_tangential_portfolio$Return)^(12)-1,
+#     stats_tangential_portfolio$`Sharpe Ratio` * sqrt(12))
+#   )
+# 
+# # output als tabelle
+# kable(stats_tangential_portfolio)
+# 
+# 
+# # tabelle für gewichte
+# h <- ceiling(nrow(weights_tangential_portfolio)/2)
+# 
+# kable(
+#   cbind(weights_tangential_portfolio[1:h, ], weights_tangential_portfolio[(h+1):nrow(weights_tangential_portfolio), ][1:h, ]),
+#   col.names = c("Ticker","Weight","Ticker","Weight")
+# )
 
 
 # Unterschiedliche Lösungen in Excel und Portfolioanalytics. Grund: Gewichtungen sind anders
@@ -691,112 +714,152 @@ portfolio_op_return_plot <- Return.portfolio(
   weights = extractWeights(tan),
   rebalance_on = NA
 )
+colnames(portfolio_op_return_plot) <- "Tangency Portfolio"
 
+portfolio_ew_xts <- xts(
+  portfolio_ew$portfolio_ew_return,
+  order.by = portfolio_ew$date.x
+)
+colnames(portfolio_ew_xts) <- "Equal Weighted"
+
+plot_data <- merge(portfolio_op_return_plot, portfolio_ew_xts, R)["2014-08-29/2024-08-30"]
+
+
+n_stocks <- ncol(R)
+
+my_colors <- c("black", "darkred", rep("lightgrey", n_stocks))
+
+my_lwd <- c(2, 2, rep(0.8, n_stocks))
+
+my_lty <- c(1, 2, rep(1, n_stocks))
 
 charts.PerformanceSummary(
-  R = merge(portfolio_op_return_plot, R)["2014-08-29/2024-08-30"],
+  R = plot_data,
   main = "Portfolio Performance vs Single Stocks",
-  colorset = c("black", rep("lightgrey", ncol(R))),
-  legend.loc = NULL
+  colorset = my_colors,
+  lwd = my_lwd,
+  lty = my_lty,
+  legend.loc = NULL 
 )
-
-
 ```
 
 ## Subperiod Analysis of Optimized Portfolio
 
 \[PLATZHALTER\]
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-
-# sub perioden analyse
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 
 portfolio_opt_sub <- tibble(
   d = as.Date(index(portfolio_op_return_plot)),
-  ret  = as.numeric(portfolio_op_return_plot)
+  ret = as.numeric(portfolio_op_return_plot)
 ) %>%
-  mutate(
-    month  = floor_date(d, "month"),
-    period = if_else(d < as.Date("2020-01-01"),
-                     "Pre-COVID", "Post-COVID")
-  ) %>%
+  mutate(month = floor_date(d, "month")) %>%
   left_join(
     dtb3 %>% mutate(month = floor_date(date, "month")),
     by = "month"
   ) %>%
-  mutate(excess = ret - rF_monthly)
-
-
-portfolio_opt_sub %>%
-  arrange(.data$date) %>%
-  mutate(price = 100 * cumprod(1 + ret)) %>%
-  ggplot(aes(date, price)) +
-  geom_line(color = "black", linewidth = 1) +
-  geom_vline(xintercept = covid_date, linetype = "dashed", color = "darkred") +
-  annotate(
-  "text",
-  x = covid_date,
-  y = max(100 * cumprod(1 + portfolio_opt_sub$ret), na.rm = TRUE),
-  label = "COVID-19",
-  vjust = -0.5,
-  hjust = -0.1,
-  color = "darkred",
-  size = 4
-) +
-  labs(
-    title = "Optimized (Tangency) Portfolio",
-    x = "Date", y = "Portfolio Value (Base = 100)"
-  ) +
-  theme_minimal()
-
-# kennzahlen subperiod
-portfolio_opt_stats_sub <- portfolio_opt_sub %>%
-  group_by(period) %>%
-  summarise(
-    mean_return_pa = mean(ret, na.rm = TRUE) * 12 * 100,
-    volatility_pa  = sd(ret, na.rm = TRUE) * sqrt(12) * 100,
-    sharpe_ratio   = mean(excess, na.rm = TRUE) /
-                     sd(ret, na.rm = TRUE) * sqrt(12),
-    .groups = "drop"
+  mutate(
+    excess = ret - rF_monthly,
+    
+    period = case_when(
+      d < as.Date("2020-01-01") ~ "1. Pre-COVID (2014–2019)",
+      d < as.Date("2022-01-01") ~ "2. Pandemic (2020–2021)",
+      TRUE                      ~ "3. Rate Hikes (2022–2024)"
+    )
   )
 
-portfolio_opt_dd_sub <- portfolio_opt_sub %>%
+
+plot_data_opt <- portfolio_opt_sub %>%
   arrange(d) %>%
-  mutate(
-    price = 100 * exp(cumsum(log(1 + ret))) /
-            first(exp(cumsum(log(1 + ret))))
-  ) %>%
+  mutate(price = 100 * cumprod(1 + ret))
+
+p <- ggplot(plot_data_opt, aes(x = d, y = price)) +
+  geom_line(color = "grey60", linewidth = 1) + 
+  geom_line(aes(color = period, group = 1), linewidth = 1) + 
+  geom_vline(xintercept = as.Date("2020-02-01"), linetype = "dotted", color = "darkred") + 
+  geom_vline(xintercept = as.Date("2022-01-01"), linetype = "dotted", color = "blue") +
+  scale_color_manual(values = c(
+    "1. Pre-COVID (2014–2019)" = "grey60", 
+    "2. Pandemic (2020–2021)" = "#1a9850", 
+    "3. Rate Hikes (2022–2024)" = "black"
+  )) +
+  labs(
+    title = "Optimized Portfolio: Regime Analysis",
+    subtitle = "Performance across different market regimes",
+    x = "Date", y = "Index (Base = 100)", color = "Regime"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+print(p)
+
+opt_stats <- portfolio_opt_sub %>%
   group_by(period) %>%
   summarise(
-    max_drawdown = min(price / cummax(price) - 1, na.rm = TRUE) * 100,
+    mean_return_arith = mean(ret, na.rm = TRUE) * 12 * 100,
+    mean_return_geo   = ((1 + (exp(mean(log(1 + ret), na.rm = TRUE)) - 1))^12 - 1) * 100,
+    volatility_pa     = sd(ret, na.rm = TRUE) * sqrt(12) * 100,
+    sharpe_ratio      = (mean(excess, na.rm = TRUE) / sd(ret, na.rm = TRUE)) * sqrt(12),
     .groups = "drop"
   )
 
-portfolio_opt_table_sub <- portfolio_opt_stats_sub %>%
-  left_join(portfolio_opt_dd_sub, by = "period") %>%
+opt_dd <- portfolio_opt_sub %>%
+  group_by(period) %>%
   mutate(
-    across(where(is.numeric), round, 2)
+    price_index = 100 * cumprod(1 + ret),
+    drawdown = price_index / cummax(price_index) - 1
+  ) %>%
+  summarise(max_drawdown = min(drawdown, na.rm = TRUE) * 100, .groups = "drop")
+
+portfolio_opt_table_sub <- opt_stats %>%
+  left_join(opt_dd, by = "period") %>%
+  mutate(across(where(is.numeric), round, 2))
+
+
+
+ew_labeled  <- portfolio_ew_table_sub  %>% 
+  mutate(Strategy = "Equal Weighted (1/N)")
+
+opt_labeled <- portfolio_opt_table_sub %>% 
+  mutate(Strategy = "Optimized (Tangency)")
+
+final_comparison <- bind_rows(ew_labeled, opt_labeled) %>%
+  
+  # Reihenfolge der Strategien explizit festlegen
+  mutate(
+    Strategy = factor(
+      Strategy,
+      levels = c("Optimized (Tangency)", "Equal Weighted (1/N)")
+    )
+  ) %>%
+  
+  mutate(across(where(is.numeric), round, 2)) %>%
+  
+  # Sortieren: erst Periode, dann Strategie-Reihenfolge
+  arrange(period, Strategy) %>%
+  
+  # Spalten: Periode ganz vorne
+  select(
+    Period = period, 
+    Strategy,
+    `Ø Geo Return` = mean_return_geo, 
+    Volatility = volatility_pa, 
+    Sharpe = sharpe_ratio, 
+    MaxDD = max_drawdown
   )
 
 kable(
-  portfolio_opt_table_sub,
-  col.names = c(
-    "Period",
-    "Ø Return (% p.a.)",
-    "Volatility (% p.a.)",
-    "Sharpe Ratio",
-    "Max Drawdown (%)"
-  ),
-  caption = "Subperiod Analysis of the Optimized (Tangency) Portfolio"
+  final_comparison,
+  caption = "Strategy Performance by Market Regime (Stacked Comparison)",
+  align = c("l", "l", "c", "c", "c", "c")
 )
-
 ```
 
 # Regression
 
 \[PLATZHALTER\]
 
-## Market Model and CAPM Evidence
+## Market Model
 
 \[PLATZHALTER\]
 
@@ -812,19 +875,23 @@ returns_market <- market_raw %>%
   group_by(month) %>%
   slice_tail(n=1) %>%
   ungroup() %>%
-  select(observation_date, NASDAQXCMP) %>%
+  select(month, observation_date, NASDAQXCMP) %>%
   mutate(return_market = NASDAQXCMP / lag(NASDAQXCMP) -1, date = observation_date) %>%
-  select(date, return_market)
+  select(month, return_market) %>%
+  drop_na()
 
+returns_wide_monthly <- returns_wide %>%
+  mutate(month = floor_date(date, "month")) %>%
+  select(-date) 
 
 returns_reg <- returns_market %>%
-  left_join(returns_wide, by = "date") %>%
+  left_join(returns_wide_monthly, by = "month") %>%
   drop_na()
 
 
 # Regression
 
-stocks <- setdiff(names(returns_reg), c("date", "return_market"))
+stocks <- setdiff(names(returns_reg), c("month", "return_market"))
 
 reg_output <- lapply(stocks, function(s) {
   model <- lm(as.formula(paste(s, "~ return_market")), data = returns_reg)
@@ -864,12 +931,17 @@ p_box <- ggplot(reg_long, aes(x = metric, y = value)) +
     width = 0.5
   ) +
   geom_jitter(width = 0.05, alpha = 0.6) +
+  facet_wrap(~metric, scales = "free", strip.position = "bottom") +
   labs(
-    title = "Distribution of CAPM Estimates",
+    title = "Distribution of Market Model Estimates",
     x = "",
     y = ""
   ) +
-  theme_minimal()
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),  
+    axis.ticks.x = element_blank()  
+  )
 p_box
 ```
 
@@ -889,7 +961,7 @@ f3f <- f3f %>% select(date, `Mkt-RF`, SMB, HML, RF) %>% filter(date >= as.Date("
 
 # monat und jahr aus datum extrahieren
 returns_reg_new <- returns_reg %>%
-  mutate(ym = format(date, "%Y-%m"))
+  mutate(ym = format(month, "%Y-%m"))
 
 f3f <- f3f %>%
   mutate(ym = format(date, "%Y-%m"))
@@ -904,7 +976,7 @@ f3f <- returns_reg_new %>%
 
 stocks_f3f <- setdiff(
   names(f3f),
-  c("date.x", "date.y", "ym", "return_market",
+  c("month", "date", "date.x", "date.y", "ym", "return_market", 
     "Mkt_RF", "SMB", "HML", "RF")
 )
 
@@ -947,12 +1019,17 @@ p_box <- ggplot(ff3_results_long, aes(x = metric, y = value)) +
     width = 0.5
   ) +
   geom_jitter(width = 0.05, alpha = 0.6) +
+  facet_wrap(~metric, scales = "free", strip.position = "bottom") +
   labs(
-    title = "Distribution of CAPM Estimates",
+    title = "Distribution of Fama-French Factor Estimates",
     x = "",
     y = ""
   ) +
-  theme_minimal()
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),  # Entfernt den doppelten Text
+    axis.ticks.x = element_blank()  # Entfernt die kleinen Striche unten
+  )
 p_box
 
 ```
