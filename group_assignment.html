@@ -35,6 +35,35 @@ ul.task-list li input[type="checkbox"] {
 <link href="group_assignment_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="group_assignment_files/libs/bootstrap/bootstrap-bb462d781dde1847d9e3ccf7736099dd.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 </head>
 
@@ -64,22 +93,72 @@ ul.task-list li input[type="checkbox"] {
 
 
 <section id="introduction" class="level1">
-<h1>INTRODUCTION</h1>
-<p>[PLATZHALTER]</p>
+<h1>Introduction</h1>
+<p>The primary objective of this project is to conduct a comprehensive empirical analysis of a selected basket of equities to evaluate their performance characteristics and risk exposures. Our project is structured into three main pillars:</p>
+<p>First, we perform a <strong>descriptive analysis</strong> of individual stock returns. We examine the distributional properties of returns, specifically looking for deviations from normality through skewness and kurtosis, and assess time-varying risk metrics. Given the distinct economic phases within our sample period, we place particular emphasis on analyzing how volatility and Sharpe ratios have evolved over time.</p>
+<p>Second, we apply <strong>Modern Portfolio Theory (MPT)</strong> to construct and compare different investment strategies. We contrast a “naive” diversification strategy (Equal-Weighted Portfolio, <span class="math inline">\(1/N\)</span>) against a sophisticated Markowitz Mean-Variance Optimization (Tangency Portfolio). Next, we perform a regime-based subperiod analysis, where we evaluate how these strategies performed during the pre-COVID era, the pandemic liquidity rally, and the recent inflationary rate-hike cycle. This allows us to answer whether complex optimization adds value compared to simple diversification during periods of market stress.</p>
+<p>Finally, we analyze the drivers of expected returns using <strong>linear factor models</strong>. We employ the Single-Index (Market) Model to estimate systematic risk (<span class="math inline">\(\beta\)</span>) and the Fama-French Three-Factor Model to decompose returns into market, size (SMB), and value (HML) premiums. This regression analysis aims to determine how much of the portfolio’s performance is attributable to broad market movements versus idiosyncratic factor exposure.</p>
 </section>
 <section id="data-and-methodology" class="level1">
 <h1>Data and Methodology</h1>
-<p>[PLATZHALTER]</p>
-<p>Anmerkungen</p>
-<p>Erstellung eines neuen Dataframes mit Returns aller Aktien.</p>
-<p>CRSP gibt arithmetische Renditen aus. Diese transformieren wir in logrithmierte. Die Returns sind bereits adjusted, d.h. Dividenden sind bereits berücksichtigt.</p>
-<p>Normierte preise auf Basis der Renditen berechnen.</p>
-<p>Preise sind nicht adjustiert. Wir werden die Kurse auf Basis der Renditen plotten - alle auf 100 normieren und dann mit den returns multiplizieren (vereinfacht das adjustment um die Dividenden - wir haben monatliche returns, dividend payments fallen damit nicht immer auf den selben tag)</p>
-<p>Folgende Preise sind “simuliert” für den Plot. Achtung: preis startet am 29.8.2014 bei 100 die return am 29.8.2014 bezieht sich aber auf Preis(29.8.2014) / Preis(28.8.2014).</p>
+<section id="data-sourcing-and-processing" class="level2">
+<h2 class="anchored" data-anchor-id="data-sourcing-and-processing">Data Sourcing and Processing</h2>
+<p>Our dataset comprises monthly closing prices for a selected basket of equities spanning a ten-year observation period from <strong>August 29, 2014, to August 30, 2024</strong>. Unfortunately, we were not able to obtain the data for the time frame from August 30, 2024 to September 2025. The raw stock data is sourced from CRSP, adjusted for corporate actions such as stock splits and dividends.</p>
+<p>To establish a benchmark for the risk-free rate <span class="math inline">\(R_f\)</span>, we utilize the 3-Month Treasury Bill Secondary Market Rate (Ticker: DTB3), sourced from the Federal Reserve Economic Data (FRED) database. As the raw data provides annualized percentages, we convert these into monthly risk-free rates using the following transformation:</p>
+<p><span class="math inline">\(R_{f, monthly} = (1 + R_{f, annual})^{1/12} - 1\)</span></p>
+<p>For the multifactor analysis, we utilize the <strong>Fama-French Three-Factor</strong> dataset (Market, SMB, HML), obtained from Kenneth French’s data library.</p>
 </section>
-<section id="descriptive-analysis-of-indiviudal-stocks" class="level1">
-<h1>Descriptive Analysis of Indiviudal Stocks</h1>
-<p>[PLATZHALTER]</p>
+<section id="return-calculation-and-index-construction" class="level2">
+<h2 class="anchored" data-anchor-id="return-calculation-and-index-construction">Return Calculation and Index Construction</h2>
+<p>A critical methodological distinction is made between logarithmic (continuously compounded) and simple (arithmetic) returns to ensure mathematical consistency across different analyses.</p>
+<ol type="1">
+<li><p><strong>Logarithmic Returns (</strong><span class="math inline">\(r_t\)</span>): calculated as <span class="math inline">\(ln(P_t / P_{t-1})\)</span>. These are utilized for the time-series analysis, descriptive statistics, and the reconstruction of price indices, as they possess the property of time-additivity.</p></li>
+<li><p><strong>Arithmetic Returns (</strong><span class="math inline">\(R_t\)</span>): calculated as <span class="math inline">\((P_t - P_{t-1}) / P_{t-1}\)</span>. These are utilized for portfolio weighting, Sharpe Ratio calculations, and regression analysis, as the weighted average of log returns does not equal the log return of a portfolio.</p></li>
+</ol>
+<p>To visualize cumulative performance, we construct normalized price indices for all assets, initialized at a base value of 100 on August 29, 2014. These “simulated” price paths allow for direct visual comparison of relative performance regardless of absolute share price.</p>
+</section>
+<section id="statistical-framework-and-measures" class="level2">
+<h2 class="anchored" data-anchor-id="statistical-framework-and-measures">Statistical Framework and Measures</h2>
+<p>We perform a descriptive analysis of the distributional properties of returns. Beyond the first two moments (Mean and Variance), we examine higher-order moments to detect deviations from normality:</p>
+<ul>
+<li><p><strong>Skewness:</strong> To measure the asymmetry of the return distribution.</p></li>
+<li><p><strong>Kurtosis:</strong> To measure the “fatness” of tails (leptokurtosis), indicating the probability of extreme events.</p></li>
+<li><p><strong>Maximum Drawdown:</strong> Calculated as the largest percentage decline from a previous peak to a subsequent trough, serving as a metric for downside risk.</p></li>
+</ul>
+</section>
+<section id="portfolio-optimization-strategy" class="level2">
+<h2 class="anchored" data-anchor-id="portfolio-optimization-strategy">Portfolio Optimization Strategy</h2>
+<p>We contrast two distinct portfolio construction methodologies:</p>
+<ol type="1">
+<li><p><strong>Naive Diversification (</strong><span class="math inline">\(1/N\)</span>): An Equal-Weighted (EW) portfolio where every asset is assigned a weight of <span class="math inline">\(w_i = 1/N\)</span>, rebalanced monthly. This serves as our baseline strategy.</p></li>
+<li><p><strong>Markowitz Mean-Variance Optimization:</strong> We construct the <strong>Tangency Portfolio</strong>, which maximizes the Sharpe Ratio. The optimization problem is solved using the <code>ROI</code> (R Optimization Infrastructure) solver under the following constraints:</p>
+<ul>
+<li><p><strong>Full Investment:</strong> <span class="math inline">\(\sum w_i = 1\)</span></p></li>
+<li><p><strong>Long-Only:</strong> <span class="math inline">\(w_i \ge 0\)</span> (No short selling allowed)</p></li>
+</ul></li>
+</ol>
+<p>The optimization determines the ex-post optimal weights that would have generated the highest risk-adjusted return over the selected decade.</p>
+</section>
+<section id="market-regimes-and-subperiod-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="market-regimes-and-subperiod-analysis">Market Regimes and Subperiod Analysis</h2>
+<p>To assess the robustness of our strategies, we segment the decade into three distinct macroeconomic regimes:</p>
+<ol type="1">
+<li><p><strong>Pre-COVID (Aug 2014 – Dec 2019):</strong> Characterized by low volatility and steady growth.</p></li>
+<li><p><strong>Pandemic Era (Jan 2020 – Dec 2021):</strong> Defined by the initial crash followed by a liquidity-driven rally (Quantitative Easing).</p></li>
+<li><p><strong>Inflation &amp; Rate Hikes (Jan 2022 – Aug 2024):</strong> Characterized by rising interest rates and high inflation.</p></li>
+</ol>
+</section>
+<section id="factor-models-and-regression" class="level2">
+<h2 class="anchored" data-anchor-id="factor-models-and-regression">Factor Models and Regression</h2>
+<p>Finally, we analyze the drivers of systematic risk using linear regression models. We employ the Single-Index Market Model using the NASDAQ Composite as the market proxy:</p>
+<p>$$R_{i,t} - R_{f,t} = \alpha_i + \beta_i(R_{M,t} - R_{f,t}) + \epsilon_{i,t}$$</p>
+<p>Additionally, we apply the Fama-French Three-Factor Model to control for size and value premiums:</p>
+<p>$$R_{i,t} - R_{f,t} = \alpha_i + \beta_{mkt}(R_{M,t} - R_{f,t}) + \beta_{SMB}SMB_t + \beta_{HML}HML_t + \epsilon_{i,t}$$</p>
+<p>This allows us to decompose returns into market risk (<span class="math inline">\(\beta\)</span>), size exposure (<span class="math inline">\(SMB\)</span>), and value exposure (<span class="math inline">\(HML\)</span>), isolating the varying degrees of alpha (<span class="math inline">\(\alpha\)</span>) generated by each stock.</p>
+</section>
+</section>
+<section id="descriptive-analysis-of-individual-stocks" class="level1">
+<h1>Descriptive Analysis of Individual Stocks</h1>
 <div class="cell">
 <div class="cell-output-display">
 <div>
@@ -89,24 +168,25 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 </div>
+<p><strong>Figure 1</strong> displays the cumulative performance of the selected stocks from 2014 to 2024, normalized to a base of 100 on a logarithmic scale. The decade is characterized by a strong bull market; despite volatility, every asset generated positive returns, with values ranging between 200 and over 1000 (representing 2x to 10x capital appreciation).</p>
+<p>Top performers like Eli Lilly (LLY) and large-cap technology stocks decoupled from the rest of the basket. Two major market shocks are clearly visible across all series: the sharp, synchronized V-shaped crash during the onset of COVID-19 in early 2020, and the prolonged valuation compression during the 2022 inflationary bear market.</p>
 <section id="return-and-risk-characteristics" class="level2">
 <h2 class="anchored" data-anchor-id="return-and-risk-characteristics">Return and Risk Characteristics</h2>
-<p>[PLATZHALTER]</p>
 <div class="cell">
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 8%">
-<col style="width: 21%">
-<col style="width: 21%">
-<col style="width: 14%">
-<col style="width: 14%">
+<col style="width: 7%">
+<col style="width: 25%">
 <col style="width: 20%">
+<col style="width: 13%">
+<col style="width: 13%">
+<col style="width: 19%">
 </colgroup>
 <thead>
 <tr class="header">
 <th style="text-align: left;">Ticker</th>
-<th style="text-align: right;">Ø Return (%) p.a.</th>
+<th style="text-align: right;">Ø Return Geo. (% p.a.)</th>
 <th style="text-align: right;">Std.Dev. (%) p.a.</th>
 <th style="text-align: right;">Minimum (%)</th>
 <th style="text-align: right;">Maximum (%)</th>
@@ -254,10 +334,12 @@ ul.task-list li input[type="checkbox"] {
 </table>
 </div>
 </div>
+<p>Eli Lilly (LLY) stands out as the top performer, delivering an annualized geometric return of 34.09%, significantly outpacing the broader group. The technology sector also exhibited strong momentum, with Apple (AAPL) and Netflix (NFLX) generating annualized returns of 28.86% and 27.53%, respectively. Conversely, traditional defensive stocks and financials lagged behind; Emerson (EMR) and Coca-Cola (KO) posted single-digit annualized returns of roughly 8-10%, reflecting their mature, lower-growth profiles.</p>
+<p>The Standard Deviation column highlights the cost of high returns. Netflix (NFLX) was the most volatile asset with an annualized standard deviation of 42.41%, coupled with a severe Maximum Drawdown of -74.67%, indicating that investors had to endure a loss of nearly three-quarters of their capital at the worst point in the cycle. Amazon (AMZN) similarly shows high risk, with volatility over 31% and a drawdown exceeding 50%.</p>
+<p>Notably, Costco (COST) and Eli Lilly (LLY) demonstrate remarkable efficiency. Despite being top-tier performers in terms of returns, their maximum drawdowns were contained at approximately -20% lower than many underperforming stocks like Schwab (SCHW) or Ebay (EBAY). This suggests that LLY and COST provided the most favorable asymmetry between upside capture and downside protection over the decade.</p>
 </section>
 <section id="distributional-properties-of-returns" class="level2">
 <h2 class="anchored" data-anchor-id="distributional-properties-of-returns">Distributional Properties of Returns</h2>
-<p>[PLATZHALTER]</p>
 <div class="cell">
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
@@ -401,6 +483,10 @@ ul.task-list li input[type="checkbox"] {
 </table>
 </div>
 </div>
+<p><strong>Table 2</strong> examines the higher-order moments of the return distributions to assess deviations from normality a critical check since many financial models (including Mean-Variance Optimization) assume normally distributed returns.</p>
+<p>The results reveal a mixed profile, though significant negative skewness is prevalent in high-volatility names. Netflix (NFLX) exhibits the most pronounced negative skew of -1.32, followed by Schwab (SCHW) at -0.93. This “left-tail” asymmetry indicates that these stocks are prone to frequent small gains punctuated by occasional, severe sharp drops (crash risk). Conversely, eBay (EBAY) displays the highest positive skewness (0.38), suggesting a distribution tilted towards positive outliers.</p>
+<p>The majority of the basket exhibits leptokurtosis (positive excess kurtosis), implying “fat tails” where extreme events occur more frequently than a normal distribution would predict. Netflix is again the outlier with an extreme excess kurtosis of 6.96, confirming its historical susceptibility to massive price shocks.</p>
+<p>Interestingly, Apple (AAPL) and Eli Lilly (LLY) are classified as platykurtic (excess kurtosis &lt; 0), indicating a “thinner” tailed distribution with fewer extreme outliers relative to the mean than the standard normal curve.</p>
 </section>
 <section id="time-varying-risk-and-performance" class="level2">
 <h2 class="anchored" data-anchor-id="time-varying-risk-and-performance">Time-Varying Risk and Performance</h2>
@@ -413,10 +499,11 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 </div>
+<p><strong>Figure 2</strong> illustrates the instability of risk-adjusted returns over time via 12-month rolling Sharpe Ratios. The plot is characterized by distinct cyclicality, most notably the synchronized regime shift in 2022, where the entire basket dropped below the zero line as falling asset prices collided with rising risk-free rates.</p>
+<p>Despite these systematic headwinds, idiosyncratic outliers are visible. Eli Lilly (LLY) significantly decoupled from the group in late 2023, achieving Sharpe Ratios exceeding 3.0, indicating that strong corporate fundamentals can occasionally override broader market stress.</p>
 </section>
 <section id="total-set-of-stocks-equally-weighted" class="level2">
 <h2 class="anchored" data-anchor-id="total-set-of-stocks-equally-weighted">Total Set of Stocks (Equally Weighted)</h2>
-<p>[PLATZHALTER]</p>
 <div class="cell">
 <div class="cell-output-display">
 <div>
@@ -425,18 +512,29 @@ ul.task-list li input[type="checkbox"] {
 </figure>
 </div>
 </div>
+</div>
+<p><strong>Figure 3</strong> visualizes the performance of a naive diversification strategy (<span class="math inline">\(1/N\)</span>) against the backdrop of its individual constituents. The bold black line represents the Equal-Weighted Portfolio, while the grey lines represent the individual stock price paths.</p>
+<p>The chart effectively demonstrates the “smoothing” effect of diversification. While individual stocks exhibit jagged, erratic volatility, with some skyrocketing and others stagnating, the equal-weighted portfolio cuts through the noise, tracking the central tendency of the group. By holding all assets, the portfolio eliminates exposure to single-stock idiosyncratic risk, ensuring that a crash in one name (e.g., Netflix in 2022) is offset by stability or gains in others.</p>
+<p>Despite not holding only the “best” winners, the naive strategy proved highly effective. The portfolio index grew from 100 to approximately 600 over the decade, representing a six-fold increase in capital. This confirms that simply maintaining exposure to this high-quality basket, without attempting to time the market or pick winners, was sufficient to generate substantial long-term wealth.</p>
+<div class="cell">
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="group_assignment_files/figure-html/unnamed-chunk-11-2.png" class="img-fluid figure-img" width="4200"></p>
+<p><img src="group_assignment_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid figure-img" width="4200"></p>
 </figure>
 </div>
 </div>
 </div>
+<p><strong>Figure 4</strong> displays the pairwise correlation coefficients between the monthly returns of all constituents. The heatmap is predominantly green, indicating positive correlations across the board—a typical characteristic of equity markets where systematic risk factors (interest rates, GDP growth) affect most assets simultaneously.</p>
+<p>Strong intra-sector relationships are clearly visible. The highest correlations are found between companies with similar business models, confirming significant shared risk exposure:</p>
+<ul>
+<li><p>Defense: Lockheed Martin (LMT) and General Dynamics (GD) exhibit a correlation of 0.67, the highest in the matrix, reflecting their joint sensitivity to geopolitical events and government spending.</p></li>
+<li><p>Big Tech: Alphabet (GOOGL) and Amazon (AMZN) show a strong link at 0.62, driven by their overlapping exposure to the digital economy and consumer sentiment.</p></li>
+</ul>
+<p>The most critical insight for portfolio construction is the behavior of Eli Lilly (LLY). The row for LLY is noticeably paler than the rest, indicating it is virtually uncorrelated with the broader basket. It even exhibits negative correlations with cyclical stocks like Old Dominion Freight Line (-0.11) and Schwab (-0.03). This lack of correlation suggests that LLY’s returns were driven almost entirely by idiosyncratic factors (e.g., drug pipeline success) rather than the market cycle, making it an exceptionally powerful diversifier in this specific portfolio.</p>
 </section>
 <section id="return-and-risk-characteristics-of-equally-weighted-portfolio" class="level2">
 <h2 class="anchored" data-anchor-id="return-and-risk-characteristics-of-equally-weighted-portfolio">Return and Risk Characteristics of Equally Weighted Portfolio</h2>
-<p>[PLATZHALTER]</p>
 <div class="cell">
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
@@ -474,21 +572,10 @@ ul.task-list li input[type="checkbox"] {
 </table>
 </div>
 </div>
+<p><strong>Table 3</strong> summarizes the performance metrics of the Equal-Weighted (<span class="math inline">\(1/N\)</span>) strategy, underlining the power of diversification. By simply averaging across the basket, the portfolio achieved an annualized Geometric Mean Return of 21.44%, driving the six-fold capital appreciation observed earlier.</p>
+<p>Most importantly, the strategy effectively suppressed risk. The annualized Volatility was reduced to 15.73%, lower than even the most stable individual stock (Coca-Cola) and significantly below high-growth names like Netflix. This risk reduction also protected capital during downturns, with a Maximum Drawdown of -19.21%, meaning the portfolio never lost more than one-fifth of its value. The resulting Sharpe Ratio of 1.22 confirms that the naive approach delivered highly efficient risk-adjusted returns.</p>
 <section id="rolling-volatility-of-equally-weighted-portfolio" class="level3">
 <h3 class="anchored" data-anchor-id="rolling-volatility-of-equally-weighted-portfolio">Rolling Volatility of Equally Weighted Portfolio</h3>
-<p>[PLATZHALTER]</p>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="group_assignment_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid figure-img" width="4200"></p>
-</figure>
-</div>
-</div>
-</div>
-</section>
-<section id="rolling-sharpe-ratio-of-equally-weighted-portfolio" class="level3">
-<h3 class="anchored" data-anchor-id="rolling-sharpe-ratio-of-equally-weighted-portfolio">Rolling Sharpe Ratio of Equally Weighted Portfolio</h3>
 <p>[PLATZHALTER]</p>
 <div class="cell">
 <div class="cell-output-display">
@@ -499,15 +586,30 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 </div>
+<p><strong>Figure 5</strong> plots the 12-month rolling volatility, demonstrating that the portfolio’s risk profile is highly non-stationary. While the long-term average volatility is approximately 15.7%, the portfolio oscillated between periods of extreme calm and significant market stress.</p>
+<p>The period around 2017–2018 represents a historical “low volatility regime,” where annualized risk dipped below 10%. This stands in stark contrast to the two major stress events of the decade: the sharp, sudden spike during the COVID-19 onset in early 2020, and the sustained peak in 2022–2023. Notably, the 2022 inflationary bear market drove volatility to a decade-high exceeding 25%, reflecting the intense uncertainty surrounding interest rate policy during that window.</p>
 </section>
-<section id="subperiod-analyis-of-equally-weighted-portfolio" class="level3">
-<h3 class="anchored" data-anchor-id="subperiod-analyis-of-equally-weighted-portfolio">Subperiod Analyis of Equally Weighted Portfolio</h3>
-<p>[PLATZHALTER]</p>
+<section id="rolling-sharpe-ratio-of-equally-weighted-portfolio" class="level3">
+<h3 class="anchored" data-anchor-id="rolling-sharpe-ratio-of-equally-weighted-portfolio">Rolling Sharpe Ratio of Equally Weighted Portfolio</h3>
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure class="figure">
 <p><img src="group_assignment_files/figure-html/unnamed-chunk-15-1.png" class="img-fluid figure-img" width="4200"></p>
+</figure>
+</div>
+</div>
+</div>
+<p><strong>Figure 6</strong> illustrates the risk-adjusted efficiency of the portfolio over time. The 12-month rolling Sharpe Ratio reveals extreme cyclicality, with the metric oscillating between a historic high of over 5.0 and a low of approximately -0.5.</p>
+<p>The chart identifies a “Golden Era” around 2017, where low volatility combined with steady gains produced exceptional risk-adjusted returns. In contrast, the 2022 inflationary regime stands out as the most challenging period; it is the only sustained interval where the Sharpe Ratio remained negative, indicating that the portfolio failed to outperform the risk-free rate for nearly a full year. A robust recovery is visible in 2024, with ratios climbing back towards 2.0.</p>
+</section>
+<section id="subperiod-analyis-of-equally-weighted-portfolio" class="level3">
+<h3 class="anchored" data-anchor-id="subperiod-analyis-of-equally-weighted-portfolio">Subperiod Analyis of Equally Weighted Portfolio</h3>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="group_assignment_files/figure-html/unnamed-chunk-16-1.png" class="img-fluid figure-img" width="4200"></p>
 </figure>
 </div>
 </div>
@@ -561,17 +663,19 @@ ul.task-list li input[type="checkbox"] {
 </table>
 </div>
 </div>
+<p>To isolate the impact of macroeconomic conditions, <strong>Figure 7</strong> segments the portfolio’s performance into three distinct regimes: Pre-COVID (Grey), the Pandemic Liquidity era (Green), and the Inflation/Rate Hike cycle (Black).</p>
+<p>The contrast between the regimes is stark. The Pandemic period (2020–2021) was the most explosive, driven by unprecedented monetary stimulus. During this window, the portfolio generated a massive Geometric Return of 33.09% with the highest risk efficiency (Sharpe Ratio 1.72).</p>
+<p>Conversely, the Rate Hike era (2022–2024) marked a clear deterioration in performance dynamics. As the “black line” illustrates, this phase began with a sharp correction. Volatility surged to a period-high of 18.62%, while geometric returns compressed to 14.68%. Consequently, the Sharpe Ratio collapsed to 0.62, quantifying how rising risk-free rates and falling asset prices combined to drastically erode the risk premium compared to the “easy money” era.</p>
 </section>
 </section>
 </section>
 <section id="portfolio-formation" class="level1">
 <h1>Portfolio formation</h1>
-<p>[PLATZHALTER]</p>
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="group_assignment_files/figure-html/unnamed-chunk-16-1.png" class="img-fluid figure-img" width="4200"></p>
+<p><img src="group_assignment_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid figure-img" width="4200"></p>
 </figure>
 </div>
 </div>
@@ -682,23 +786,29 @@ ul.task-list li input[type="checkbox"] {
 </table>
 </div>
 </div>
+<p><strong>Figure 8</strong> visualizes the Efficient Frontier, the set of optimal portfolios that offer the highest expected return for a defined level of risk. The individual stocks (open circles) all lie below this curve, illustrating that holding single assets is inefficient compared to a diversified combination.</p>
+<p>The optimization algorithm, tasked with maximizing the Sharpe Ratio, constructed a highly concentrated Tangency Portfolio. Contrary to a traditional diversified approach, the model allocated 36.91% of capital to a single stock: Eli Lilly (LLY). This is illustrated in <strong>table 5.</strong></p>
+<p>This extreme allocation confirms our earlier correlation analysis; because LLY was virtually uncorrelated with the rest of the basket, the optimizer treated it as a unique source of alpha. Significant weights were also assigned to defensive/low-beta names like Lockheed Martin (14.56%) and Costco (14.54%). Interestingly, “Big Tech” giants like Apple, Amazon, and Google received zero weight, as their high correlation with each other offered no marginal diversification benefit.</p>
+<p><strong>Table 6</strong> quantifies the value of this optimization. The Tangency Portfolio dominated the naive strategy on every metric: it delivered a higher Geometric Return (27.73% vs.&nbsp;21.44%) while simultaneously achieving <em>lower</em> Volatility (14.92% vs.&nbsp;15.73%).</p>
+<p>The result is a superior Sharpe Ratio of 1.62 (vs.&nbsp;1.22 for the Equal-Weighted), proving that mathematically, the “free lunch” of diversification is maximized not by holding everything, but by holding the <em>right</em> uncorrelated assets.</p>
 <section id="performance-of-optimized-portfolio-vs-single-stocks" class="level2">
 <h2 class="anchored" data-anchor-id="performance-of-optimized-portfolio-vs-single-stocks">Performance of Optimized Portfolio vs Single Stocks</h2>
-<p>[PLATZHALTER]</p>
 <div class="cell">
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="group_assignment_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid figure-img" width="4200"></p>
+<p><img src="group_assignment_files/figure-html/unnamed-chunk-18-1.png" class="img-fluid figure-img" width="4200"></p>
 </figure>
 </div>
 </div>
 </div>
+<p><strong>Figure 9</strong> contrasts the cumulative wealth generation of the Optimized Tangency Portfolio (Black) against the Naive Equal-Weighted Strategy (Red) and the universe of individual stocks (Grey).</p>
+<p>The optimization demonstrated superior capital appreciation. The Tangency Portfolio ended the decade with a cumulative return exceeding 10x (a +1000% gain), significantly separating itself from the Naive strategy, which finished near 6x. While one single stock (Eli Lilly) outperformed the portfolio, the optimized strategy surpassed the vast majority of individual names without assuming single-stock concentration risk.</p>
+<p>Crucially, the bottom panel highlights the strategy’s defensive value. While individual stocks frequently suffered catastrophic drawdowns of -40% to -60%, particularly during the 2022 crash, the Optimized Portfolio’s drawdowns were visibly shallower, successfully capturing market upside while smoothing out volatility.</p>
 </section>
 <section id="subperiod-analysis-of-optimized-portfolio" class="level2">
 <h2 class="anchored" data-anchor-id="subperiod-analysis-of-optimized-portfolio">Subperiod Analysis of Optimized Portfolio</h2>
-<p>[PLATZHALTER]</p>
-<p><img src="group_assignment_files/figure-html/unnamed-chunk-18-1.png" class="img-fluid" width="4200"></p>
+<p><img src="group_assignment_files/figure-html/unnamed-chunk-19-1.png" class="img-fluid" width="4200"></p>
 <table class="caption-top table">
 <caption>Strategy Performance by Market Regime (Stacked Comparison)</caption>
 <colgroup>
@@ -770,14 +880,19 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 </tbody>
 </table>
+<p><strong>Figure 10 and Table 7</strong> break down the performance of the Tangency Portfolio across the three economic regimes, revealing a stark divergence in the final phase.</p>
+<p>During the “Pre-COVID” and “Pandemic” eras, the optimization added incremental value. In the Pandemic liquidity rally, the Tangency portfolio captured a stunning Geometric Return of 40.43%, significantly outpacing the Equal-Weighted strategy (33.09%) while maintaining lower volatility.</p>
+<p>The true value of the optimization emerged during the “Rate Hike” regime (Black line). While the naive portfolio struggled with a Sharpe Ratio of just 0.62, the Optimized Portfolio maintained a robust Sharpe Ratio of 1.29.</p>
+<p>Most notably, the optimized strategy generated double the returns (32.68% vs.&nbsp;14.68%) of the naive approach during this stress period. This resilience is directly attributable to the portfolio’s composition: the heavy allocation to Eli Lilly (which rallied on idiosyncratic news) and the exclusion of interest-rate-sensitive Big Tech stocks allowed the portfolio to largely ignore the 2022 bear market. This is confirmed by the maximum drawdown: the optimized portfolio lost only -7.67% in this period, compared to -17.36% for the equal-weighted basket.</p>
 </section>
 </section>
 <section id="regression" class="level1">
 <h1>Regression</h1>
-<p>[PLATZHALTER]</p>
+<p>To understand the drivers of performance, we move beyond simple return statistics to factor attribution. We employ linear regression to decompose the returns of each stock into <strong>systematic risk</strong> (exposure to broad market factors) and <strong>idiosyncratic alpha</strong> (stock-specific performance).</p>
 <section id="market-model" class="level2">
 <h2 class="anchored" data-anchor-id="market-model">Market Model</h2>
-<p>[PLATZHALTER]</p>
+<p>To measure the risk of each stock, we used the Single-Index Market Model. This regression compares individual stock returns (<span class="math inline">\(R_{i}\)</span>) against the NASDAQ Composite index (<span class="math inline">\(R_{m}\)</span>). The goal is to separate risk into two parts: market-driven risk (Beta) and company-specific return (Alpha). The formula used is:</p>
+<p>$<span class="math inline">\(R_{i,t} = \alpha_i + \beta_i R_{m,t} + \epsilon_{i,t}\)</span>$</p>
 <div class="cell">
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
@@ -934,15 +1049,28 @@ ul.task-list li input[type="checkbox"] {
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="group_assignment_files/figure-html/unnamed-chunk-19-1.png" class="img-fluid figure-img" width="4200"></p>
+<p><img src="group_assignment_files/figure-html/unnamed-chunk-20-1.png" class="img-fluid figure-img" width="4200"></p>
 </figure>
 </div>
 </div>
 </div>
+<p><strong>Table 8</strong> displays the results for each stock in the portfolio.</p>
+<p>The Beta values show a clear split in the portfolio. The technology stocks are aggressive and amplify market movements. For example, Netflix (<span class="math inline">\(\beta=1.30\)</span>) and Amazon (<span class="math inline">\(\beta=1.27\)</span>) have Betas well above 1.0, meaning they tend to rise and fall much more than the market.</p>
+<p>On the other hand, defensive stocks act as stabilizers. Coca-Cola (<span class="math inline">\(\beta=0.32\)</span>) and Lockheed Martin (<span class="math inline">\(\beta=0.34\)</span>) have very low sensitivity, meaning they are largely unaffected by daily market volatility.</p>
+<p>The <span class="math inline">\(R^2\)</span> value tells us how closely a stock follows the market. For major tech companies like Apple, the <span class="math inline">\(R^2\)</span> is high (<span class="math inline">\(0.59\)</span>). This suggests that nearly 60% of Apple’s price movement is caused by general market trends rather than company-specific news.</p>
+<p>The standout result is Eli Lilly (LLY). It has almost no correlation with the market (<span class="math inline">\(R^2=0.045\)</span>) and a low Beta of 0.29. Most importantly, it is the only stock with a statistically significant Alpha of 2.1% per month. This proves that LLY’s strong performance was driven by its own success (such as new drug launches) rather than just a rising stock market.</p>
 </section>
 <section id="multifactor-model-results" class="level2">
 <h2 class="anchored" data-anchor-id="multifactor-model-results">Multifactor Model Results</h2>
-<p>[PLATZHALTER]</p>
+<p>While the single-factor model gave us a rough estimate of risk, it missed important details about investment “styles.” To fix this, we used the <strong>Fama-French 3-Factor Model</strong>. This model breaks down returns into three specific sources of risk:</p>
+<ol type="1">
+<li><p><strong>Market Risk</strong> (Mkt-RF)</p></li>
+<li><p><strong>Size Risk</strong> (SMB: Small Minus Big)</p></li>
+<li><p><strong>Value Risk</strong> (HML: High Minus Low)</p></li>
+</ol>
+<p>The regression equation used is:</p>
+<p>$<span class="math inline">\(R_{i} - R_{f} = \alpha + \beta_{mkt}(R_{m} - R_{f}) + \beta_{smb}SMB + \beta_{hml}HML + \epsilon\)</span></p>
+<p><strong>Table 9</strong> shows how each stock relates to these factors.</p>
 <div class="cell">
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
@@ -1096,19 +1224,36 @@ ul.task-list li input[type="checkbox"] {
 </tbody>
 </table>
 </div>
+</div>
+<div class="cell">
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="group_assignment_files/figure-html/unnamed-chunk-20-1.png" class="img-fluid figure-img" width="4200"></p>
+<p><img src="group_assignment_files/figure-html/unnamed-chunk-22-1.png" class="img-fluid figure-img" width="4200"></p>
 </figure>
 </div>
 </div>
 </div>
+<p>The most revealing outcome from <strong>Table 9</strong> concerns the investment style of the portfolio. The HML factor, which separates “Growth” from “Value” stocks, shows that the portfolio is heavily skewed toward aggressive Growth. Tech giants like Amazon and Netflix exhibit almost perfect negative scores of -0.98 and -0.97, respectively. This structural bias explains the severity of the 2022 crash; since Growth stocks are mathematically sensitive to interest rates, these assets collapsed not just because the market fell, but because their specific investment style stopped working when rates rose. The only significant counter-balance was Charles Schwab, which showed a positive score of 0.84, confirming its behavior as a traditional Value stock.</p>
+<p>The analysis also highlights a clear split in company size through the SMB factor. Coca-Cola exhibits a strong negative score of -0.75, confirming that it acts as a “Mega-Cap” stabilizer that provides safety and lower volatility. In contrast, Old Dominion Freight Line shows a positive score of 0.51, indicating that it trades with the volatility and characteristics of a mid-sized company, adding a distinct layer of risk to the group despite its large size.</p>
+<p>Finally, the most critical finding concerns Eli Lilly (LLY). While the simple market model suggested it was a top performer, the multifactor model confirms this was due to skill rather than luck. Even after subtracting the effects of the market rally, the size factor, and the growth style, Eli Lilly still retains a “True Alpha” of 1.94% per month. This proves that its returns were driven by idiosyncratic business success, such as new drug launches, rather than broad sector trends. This finding validates the optimization algorithm’s decision to bet heavily on LLY, as it was the only asset generating significant profit completely independent of the economic cycle.</p>
 </section>
+</section>
+<section id="limitations" class="level1">
+<h1>Limitations</h1>
+<p>While the Optimized Portfolio was mathematically superior, it highlights a critical limitation of ex-post Mean-Variance Optimization: Hindsight Bias.</p>
+<ul>
+<li><p>Concentration Risk: The model allocated nearly 37% of capital to a single stock (LLY). In a real-world scenario, this would be considered reckless risk management. If LLY’s clinical trials had failed, the portfolio’s performance would have been catastrophic.</p></li>
+<li><p>Instability: The “optimal” weights are highly sensitive to the specific time period chosen. A slight change in the start or end date could drastically alter the suggested allocation.</p></li>
+</ul>
+<p>Therefore, while the Tangency Portfolio serves as a powerful theoretical benchmark for what <em>was</em> possible, the Equal-Weighted portfolio likely represents a more realistic and robust strategy for an investor facing an uncertain future.</p>
 </section>
 <section id="conclusion" class="level1">
 <h1>Conclusion</h1>
-<p>[PLATZHALTER]</p>
+<p>This analysis of the financial markets from 2014 to 2024 offers clear lessons on the strengths and weaknesses of different investment strategies. By comparing a simple “naive” portfolio against a mathematically optimized one, we drew three major conclusions.</p>
+<p>The Equal-Weighted (<span class="math inline">\(1/N\)</span>) strategy proved that simply holding many stocks does not always guarantee safety. While this approach successfully protected against individual company failures (like Netflix’s crash), it failed to protect against the broader economic shift in 2022. Our regression analysis explains why: the portfolio was heavily packed with “Growth” stocks. Because these companies all share the same sensitivity to interest rates, diversification failed when rates rose, causing the entire basket to fall together.</p>
+<p>The Tangency Portfolio significantly outperformed the naive strategy, especially during the crisis. It achieved this not by being more diversified, but by being more selective. The optimization algorithm correctly identified that holding Big Tech stocks (Amazon, Apple, Google) was redundant. Instead, it concentrated capital in Eli Lilly, which our models confirmed was the only asset with “True Alpha”, profit generated by company success rather than market trends. This allowed the optimized portfolio to generate positive returns even when the rest of the market was falling.</p>
+<p>Ultimately, this study highlights a conflict between math and reality. Theoretically, the optimized portfolio was superior because it successfully swapped market risk for specific company skill. However, in practice, allocating nearly 37% of a portfolio to a single stock is extremely dangerous. While the optimized strategy serves as a powerful example of what was possible in hindsight, the simple diversified portfolio likely remains the more robust choice for an investor facing an uncertain future.</p>
 </section>
 
 </main>
